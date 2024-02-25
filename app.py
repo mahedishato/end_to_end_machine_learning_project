@@ -1,35 +1,33 @@
 import pickle
-from flask import Flask , request, jsonify, redirect, render_template
-import pandas as pd , numpy as np 
+from fastapi import FastAPI, Form, Request
+from fastapi.templating import Jinja2Templates
+import numpy as np
 
-app=Flask(__name__)
-## load the model 
+app = FastAPI()
+templates = Jinja2Templates(directory="templates")
+
+# Load the model and scaling
 model = pickle.load(open('regression_model.pkl', 'rb'))
 scaling = pickle.load(open('scaling.pkl', 'rb'))
 
 
-@app.route('/')
-def home():
-    return render_template('home.html')
+@app.get('/')
+def home(request: Request):
+    return templates.TemplateResponse("home.html", {"request": request, "prediction_text": ""})
 
 
-@app.route('/predict_api', methods = ['POST'])
-def predict_api():
-    data = request.json['data']
-    data = np.array(list(data.values())).reshape(1,-1)
-    # data = list(np.array(data.values()))
-    new_data = scaling.transform(data)
-    output = model.predict(new_data)
-    return jsonify(output[0])
-
-@app.route('/predict',methods=['POST'])
-def predict():
-    data=[float(x) for x in request.form.values()]
-    final_input=scaling.transform(np.array(data).reshape(1,-1))
-    print(final_input)
-    output=model.predict(final_input)[0]
-    return render_template("home.html",prediction_text="The House price prediction is {}".format(output))
+@app.post('/predict')
+def predict(request: Request, CRIM: float = Form(...), ZN: float = Form(...), INDUS: float = Form(...),
+            CHAS: float = Form(...), NOX: float = Form(...), RM: float = Form(...), Age: float = Form(...),
+            DIS: float = Form(...), RAD: float = Form(...), TAX: float = Form(...), PTRATIO: float = Form(...),
+            B: float = Form(...), LSTAT: float = Form(...)):
+    data = [CRIM, ZN, INDUS, CHAS, NOX, RM, Age, DIS, RAD, TAX, PTRATIO, B, LSTAT]
+    final_input = scaling.transform(np.array(data).reshape(1, -1))
+    output = model.predict(final_input)[0]
+    return templates.TemplateResponse("home.html", {"request": request, "prediction_text": f"The House price prediction is {output:.2f}"})
 
 
-if __name__ == '__main__':
-    app.run(debug=True)
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run(app, host="127.0.0.1", port=8000)
